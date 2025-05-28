@@ -21,7 +21,7 @@ You will need to connect to a WebSocket server that is already set up and runnin
    - Job Name
    - Current Status (e.g., "In Progress", "Completed", "Failed")
    - Progress Percentage (0-100%)
-3. When a job is completed, it should remain in the list for 5 seconds and then disappear. If a job fails, it should remain in the list indefinitely.
+3. When a job is completed, it should remain in the list for 5 seconds and then disappear.
 4. Use the provided HTML/CSS in the `client` folder as a starting point for your React components.
 5. You can modify the HTML/CSS as needed, but the core functionality should remain intact.
 6. Ensure the application is built using:
@@ -76,7 +76,7 @@ Each job has the following JSON structure in the WebSocket messages:
   "id": "n4x8e2Zk", // Unique job ID
   "name": "Client Job #1", // Job name
   "progress": 0, // Progress percentage (0-100)
-  "status": "pending" // Current status: "pending", "in-progress", "completed", or "failed"
+  "status": "pending" // Current status: "pending", "in-progress", or "completed"
 }
 ```
 
