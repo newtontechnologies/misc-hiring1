@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/style.css" />
+  <title>Job Progress Dashboard</title>
+
+  <script type="module" src="/index.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Job Progress Dashboard</h1>
+    <div class="job-list" id="job-list">
+      <!-- Jobs will be injected here dynamically -->
+      <div class="job">
+        <div class="job-name">Job #123</div>
+        <div class="progress-bar" role="progressbar">
+          <div class="progress-fill" style="width: 50%;"></div>
+        </div>
+        <div class="job-status">In Progress</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
