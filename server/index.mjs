@@ -5,9 +5,8 @@ import { nanoid } from 'nanoid';
 const PORT = process.env.PORT || 4000; // Default port for the WebSocket server
 
 // --- Configuration ---
-const INITIAL_JOB_COUNT_MIN_PER_CLIENT = 3;
-const INITIAL_JOB_COUNT_MAX_PER_CLIENT = 7;
-const JOB_UPDATE_INTERVAL_MS = 1000;       // How often to check for job progress updates
+const INITIAL_JOB_MIN_COUNT = 3;
+const INITIAL_JOB_MAX_COUNT = 7;
 const JOB_PROGRESS_INCREMENT_MIN = 5;      // Min progress % to add per update
 const JOB_PROGRESS_INCREMENT_MAX = 15;     // Max progress % to add per update
 const CHANCE_TO_PROGRESS_JOB = 0.7;        // 70% chance a job will progress each update cycle
@@ -27,14 +26,26 @@ function getJobStatus(progress) {
   return "in-progress";
 }
 
-// --- WebSocket Server Setup ---
 const server = http.createServer();
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server, path: '/ws/jobs' });
 
 console.log(`WebSocket server started on ws://localhost:${PORT}`);
 
-wss.on('connection', (ws) => {
-  console.log('Client connected');
+wss.on('connection', (ws, req) => {
+  const url = new URL(req.url, `ws://${req.headers.host}`);
+  const periodParam = url.searchParams.get('period');
+  if (periodParam === null || isNaN(Number(periodParam))) {
+    console.error('Invalid or missing "period" query parameter. Connection will be closed.');
+    ws.close(4000, 'Invalid period parameter. Must be a whole number between 50 and 5000 ms.');
+    return;
+  }
+
+  const period = parseInt(periodParam, 10);
+  if (period < 50 || period > 5000) {
+    console.error('Period must be between 50ms and 5000ms. Connection will be closed.');
+    ws.close(4000, 'Invalid period value. Must be a whole number between 50 and 5000 ms.');
+    return;
+  }
 
   // Initialize data for this client
   const jobsForClient = new Map();
@@ -46,7 +57,7 @@ wss.on('connection', (ws) => {
   });
 
   // Create initial random jobs for this client
-  const numInitialJobs = getRandomInt(INITIAL_JOB_COUNT_MIN_PER_CLIENT, INITIAL_JOB_COUNT_MAX_PER_CLIENT);
+  const numInitialJobs = getRandomInt(INITIAL_JOB_MIN_COUNT, INITIAL_JOB_MAX_COUNT);
   const initialJobsPayload = [];
 
   for (let i = 0; i < numInitialJobs; i++) {
@@ -71,9 +82,8 @@ wss.on('connection', (ws) => {
   console.log(`Sent ${initialJobsPayload.length} initial jobs to new client.`);
 
   // Start job advancement interval for this client
-  const intervalId = setInterval(() => advanceClientJobs(ws), JOB_UPDATE_INTERVAL_MS);
+  const intervalId = setInterval(() => advanceClientJobs(ws), period);
   clientData.get(ws).jobAdvancementInterval = intervalId;
-
 
   ws.on('message', (message) => {
     console.log(`Received message from client (ignored): ${message}`);
@@ -110,9 +120,8 @@ function advanceClientJobs(ws) {
   }
 
   const { jobs } = clientInfo;
-  let updated = false;
 
-  jobs.forEach(job => {
+  for (const job of jobs.entries()) {
     if (job.progress < 100) {
       if (Math.random() < CHANCE_TO_PROGRESS_JOB) {
         const increment = getRandomInt(JOB_PROGRESS_INCREMENT_MIN, JOB_PROGRESS_INCREMENT_MAX);
@@ -121,19 +130,18 @@ function advanceClientJobs(ws) {
 
         // Send update only to this specific client
         ws.send(JSON.stringify({
-          event: 'job-update', // Kebab-case event name
-          payload: job
+          event: 'job-update',
+          payload: {
+            id: job.id,
+            progress: job.progress,
+            status: job.status
+          }
         }));
         updated = true;
       }
     }
-  });
-
-  if (updated) {
-    // console.log(`Advanced jobs for a client.`);
   }
 }
-
 
 // Start the HTTP server
 server.listen(PORT, () => {
