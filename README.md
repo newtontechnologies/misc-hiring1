@@ -74,7 +74,7 @@ Each job has the following JSON structure in the WebSocket messages:
 ```json
 {
   "id": "n4x8e2Zk", // Unique job ID
-  "name": "Client Job #1 (ID: n4x8e2Zk)", // Job name
+  "name": "Client Job #1", // Job name
   "progress": 0, // Progress percentage (0-100)
   "status": "pending" // Current status: "pending", "in-progress", "completed", or "failed"
 }

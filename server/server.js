@@ -1,5 +1,6 @@
-import WebSocket, { WebSocketServer } from 'ws';
-import http from 'http';
+import WebSocket from 'ws';
+import express from 'express';
+import expressWs from 'express-ws';
 import { nanoid } from 'nanoid';
 
 const PORT = process.env.PORT || 4000; // Default port for the WebSocket server
@@ -7,9 +8,9 @@ const PORT = process.env.PORT || 4000; // Default port for the WebSocket server
 // --- Configuration ---
 const INITIAL_JOB_MIN_COUNT = 3;
 const INITIAL_JOB_MAX_COUNT = 7;
-const JOB_PROGRESS_INCREMENT_MIN = 5;      // Min progress % to add per update
-const JOB_PROGRESS_INCREMENT_MAX = 15;     // Max progress % to add per update
-const CHANCE_TO_PROGRESS_JOB = 0.7;        // 70% chance a job will progress each update cycle
+const JOB_PROGRESS_INCREMENT_MIN = 1;      // Min progress % to add per update
+const JOB_PROGRESS_INCREMENT_MAX = 10;     // Max progress % to add per update
+const CHANCE_TO_PROGRESS_JOB = 0.5;        // 50% chance a job will progress each update cycle
 
 // --- Store for client-specific jobs ---
 // Map: WebSocket client instance => { jobs: Map<jobId, jobData>, jobAdvancementInterval: IntervalID, jobCounter: number }
@@ -26,22 +27,20 @@ function getJobStatus(progress) {
   return "in-progress";
 }
 
-const server = http.createServer();
-const wss = new WebSocketServer({ server, path: '/ws/jobs' });
+const server = express();
+server.use(express.static('public')); // Serve static files from 'public' directory
 
-console.log(`WebSocket server started on ws://localhost:${PORT}`);
-
-wss.on('connection', (ws, req) => {
-  const url = new URL(req.url, `ws://${req.headers.host}`);
-  const periodParam = url.searchParams.get('period');
-  if (periodParam === null || isNaN(Number(periodParam))) {
+expressWs(server);
+server.ws('/ws/jobs', (ws, req) => {
+  const { period } = req.query;
+  if (period === null || isNaN(Number(period))) {
     console.error('Invalid or missing "period" query parameter. Connection will be closed.');
     ws.close(4000, 'Invalid period parameter. Must be a whole number between 50 and 5000 ms.');
     return;
   }
 
-  const period = parseInt(periodParam, 10);
-  if (period < 50 || period > 5000) {
+  const periodValue = parseInt(period, 10);
+  if (periodValue < 50 || periodValue > 5000) {
     console.error('Period must be between 50ms and 5000ms. Connection will be closed.');
     ws.close(4000, 'Invalid period value. Must be a whole number between 50 and 5000 ms.');
     return;
@@ -65,7 +64,7 @@ wss.on('connection', (ws, req) => {
     const jobId = nanoid(8); // Using nanoid with a length of 8
     const newJob = {
       id: jobId,
-      name: `Client Job #${clientJobCounter} (ID: ${jobId})`,
+      name: `Client Job #${clientJobCounter}`,
       progress: 0,
       status: getJobStatus(0),
     };
@@ -82,7 +81,7 @@ wss.on('connection', (ws, req) => {
   console.log(`Sent ${initialJobsPayload.length} initial jobs to new client.`);
 
   // Start job advancement interval for this client
-  const intervalId = setInterval(() => advanceClientJobs(ws), period);
+  const intervalId = setInterval(() => advanceClientJobs(ws), periodValue);
   clientData.get(ws).jobAdvancementInterval = intervalId;
 
   ws.on('message', (message) => {
@@ -101,7 +100,6 @@ wss.on('connection', (ws, req) => {
 
   ws.on('error', (error) => {
     console.error(`WebSocket error for a client: ${error.message}`);
-    // Consider also cleaning up clientData if the error is fatal for this ws connection
     // For simplicity, we rely on 'close' event for cleanup.
   });
 });
@@ -113,21 +111,21 @@ function advanceClientJobs(ws) {
   if (!clientInfo || !ws || ws.readyState !== WebSocket.OPEN) {
     // Client might have disconnected or data not found, stop if interval is still somehow running
     if (clientInfo && clientInfo.jobAdvancementInterval) {
-        clearInterval(clientInfo.jobAdvancementInterval);
-        clientData.delete(ws); // Defensive cleanup
+      clearInterval(clientInfo.jobAdvancementInterval);
+      clientData.delete(ws); // Defensive cleanup
     }
     return;
   }
 
   const { jobs } = clientInfo;
-
-  for (const job of jobs.entries()) {
+  for (const job of jobs.values()) {
     if (job.progress < 100) {
       if (Math.random() < CHANCE_TO_PROGRESS_JOB) {
         const increment = getRandomInt(JOB_PROGRESS_INCREMENT_MIN, JOB_PROGRESS_INCREMENT_MAX);
         job.progress = Math.min(100, job.progress + increment);
         job.status = getJobStatus(job.progress);
 
+        console.log(`Job ${job.id} progressed to ${job.progress}% (${job.status})`);
         // Send update only to this specific client
         ws.send(JSON.stringify({
           event: 'job-update',
@@ -137,7 +135,6 @@ function advanceClientJobs(ws) {
             status: job.status
           }
         }));
-        updated = true;
       }
     }
   }

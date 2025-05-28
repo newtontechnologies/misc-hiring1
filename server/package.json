@@ -1,0 +1,14 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "main": "index.mjs",
+  "type": "module",
+  "author": "Martin Podloucký",
+  "description": "Server for the exercise app",
+  "dependencies": {
+    "express": "^5.1.0",
+    "express-ws": "^5.0.2",
+    "nanoid": "^5.1.5",
+    "ws": "^8.18.2"
+  }
+}
